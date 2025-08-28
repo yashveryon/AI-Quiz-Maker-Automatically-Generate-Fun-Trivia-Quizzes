@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Quiz Maker</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-size: cover;
+      background-position: center;
+      transition: background-image 0.5s ease-in-out;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      color: white;
+      padding: 2rem;
+      backdrop-filter: blur(8px);
+      background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    input, button {
+      padding: 1rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: none;
+      margin-top: 0.5rem;
+    }
+
+    input {
+      width: 300px;
+      text-align: center;
+    }
+
+    button {
+      margin-top: 1rem;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .theme-grid {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 1.5rem;
+    }
+
+    .theme-box {
+      width: 100px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 3px solid transparent;
+      cursor: pointer;
+      text-align: center;
+      transition: transform 0.3s, border 0.3s;
+    }
+
+    .theme-box img {
+      width: 100%;
+      height: 70px;
+      object-fit: cover;
+      border-radius: 6px;
+    }
+
+    .theme-box span {
+      display: block;
+      margin-top: 0.3rem;
+      font-size: 0.9rem;
+    }
+
+    .theme-box.selected {
+      border: 3px solid #00ffcc;
+      transform: scale(1.05);
+    }
+
+    .question-wrapper {
+      max-width: 800px;
+      text-align: left;
+      margin-top: 2rem;
+    }
+
+    .question-wrapper h3,
+    .question-wrapper p {
+      text-align: center;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1rem;
+      margin: 0.5rem 0;
+    }
+
+    .option-label input {
+      transform: scale(1.3);
+    }
+
+    #result-summary {
+      max-width: 800px;
+      margin-top: 2rem;
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 1rem;
+      border-radius: 10px;
+    }
+
+    hr {
+      border: 0.5px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container" id="startScreen">
+    <h1>Start Your Quiz</h1>
+    <input type="text" id="quizTopic" placeholder="Enter quiz topic (e.g. Space, History)" />
+    <button onclick="startQuiz()">Start Quiz</button>
+
+    <h3>Select Theme</h3>
+    <div class="theme-grid" id="themeGrid">
+      <div class="theme-box" data-theme="education">
+        <img src="images/education.jpeg" alt="Education">
+        <span>Education</span>
+      </div>
+      <div class="theme-box" data-theme="history">
+        <img src="images/history.jpeg" alt="History">
+        <span>History</span>
+      </div>
+      <div class="theme-box" data-theme="nature">
+        <img src="images/nature.jpeg" alt="Nature">
+        <span>Nature</span>
+      </div>
+      <div class="theme-box" data-theme="tech">
+        <img src="images/tech.jpg" alt="Tech">
+        <span>Tech</span>
+      </div>
+      <div class="theme-box" data-theme="world">
+        <img src="images/world.jpeg" alt="World">
+        <span>World</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="container hidden" id="quizContainer">
+    <h2>Quiz: <span id="topicDisplay"></span></h2>
+    <div class="question-wrapper" id="questionBox">Loading quiz...</div>
+    <div id="result-summary"></div>
+  </div>
+
+  <script>
+    const themeBackgrounds = {
+      education: 'images/education.jpeg',
+      history: 'images/history.jpeg',
+      nature: 'images/nature.jpeg',
+      tech: 'images/tech.jpg',
+      world: 'images/world.jpeg'
+    };
+
+    let selectedTheme = null;
+    let sessionId = null;
+
+    document.querySelectorAll('.theme-box').forEach(box => {
+      box.addEventListener('click', () => {
+        document.querySelectorAll('.theme-box').forEach(b => b.classList.remove('selected'));
+        box.classList.add('selected');
+        selectedTheme = box.getAttribute('data-theme');
+        document.body.style.backgroundImage = `url('${themeBackgrounds[selectedTheme]}')`;
+      });
+    });
+
+    function startQuiz() {
+      const topic = document.getElementById("quizTopic").value.trim();
+      if (!topic || !selectedTheme) {
+        alert("Please enter a topic and select a theme.");
+        return;
+      }
+
+      document.getElementById("startScreen").classList.add("hidden");
+      document.getElementById("quizContainer").classList.remove("hidden");
+      document.getElementById("topicDisplay").innerText = topic;
+
+      fetch("http://localhost:8000/quiz/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic })
+      })
+      .then(res => res.json())
+      .then(data => {
+        sessionId = data.session_id;
+        renderQuestion(data);
+      })
+      .catch(err => {
+        console.error("Failed to load quiz:", err);
+        document.getElementById("questionBox").innerText = "❌ Error loading quiz.";
+      });
+    }
+
+    function renderQuestion(data) {
+      const q = data.question;
+      const box = document.getElementById("questionBox");
+      const resultBox = document.getElementById("result-summary");
+      resultBox.innerHTML = "";
+
+      box.innerHTML = `
+        <h3>Q${data.question_num} (${data.difficulty})</h3>
+        <p>${q.question}</p>
+        <form id="quizForm">
+          ${q.options.map((opt, idx) => {
+            const label = String.fromCharCode(65 + idx);
+            return `
+              <label class="option-label">
+                <input type="radio" name="opt" value="${opt}">
+                <strong>${label}.</strong> ${opt}
+              </label>`;
+          }).join("")}
+          <button type="submit">Submit Answer</button>
+        </form>
+      `;
+
+      document.getElementById("quizForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const selected = document.querySelector('input[name="opt"]:checked');
+        if (!selected) return alert("Please select an option.");
+
+        fetch("http://localhost:8000/quiz/answer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            user_answer: selected.value
+          })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.completed) {
+            showFinalResult(data);
+          } else {
+            renderQuestion(data);
+          }
+        });
+      });
+    }
+
+    function showFinalResult(data) {
+      const box = document.getElementById("questionBox");
+      const resultBox = document.getElementById("result-summary");
+
+      box.innerHTML = `<h2>🎉 Quiz Completed</h2><p>Your Score: ${data.final_score} / 10</p>`;
+
+      let summary = `<hr>`;
+      data.history.forEach((q, i) => {
+        summary += `
+          <p><strong>Q${i + 1}:</strong> ${q.question}</p>
+          <p>Your Answer: <strong>${q.user_answer || 'N/A'}</strong></p>
+          <p>Correct Answer: <strong>${q.correct_option}</strong></p>
+          <p style="color:${q.result ? 'lightgreen' : 'salmon'}">
+            ${q.result ? '✅ Correct' : '❌ Incorrect'}
+          </p>
+          <hr>
+        `;
+      });
+
+      resultBox.innerHTML = summary;
+    }
+  </script>
+</body>
+</html>
